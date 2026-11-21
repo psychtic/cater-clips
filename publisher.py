@@ -5,8 +5,12 @@ For every clip waiting in queue.json it:
   1. checks Telegram for Reject taps
   2. if the clip was rejected: marks it rejected and tells you
   3. if the reject window (30 min) is over: downloads it back from Telegram
-     and uploads it to YouTube, then tells you the link
+     and posts it to every connected platform (YouTube, Facebook, Instagram),
+     then tells you the links
   4. otherwise leaves it for the next run
+
+A platform is "connected" when its secrets exist. One platform failing does not
+stop the others, and a failed platform is not retried (so nothing is posted twice).
 
 Needs a bot that nothing else is reading updates from (see README).
 """
@@ -23,11 +27,16 @@ TG_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 TG_CHAT = os.environ.get("TELEGRAM_CHAT_ID", "")
 QUEUE_FILE = Path(os.environ.get("QUEUE_FILE", "queue.json"))
 WINDOW_MINUTES = int(os.environ.get("WINDOW_MINUTES", "30"))
-MAX_UPLOADS_PER_DAY = int(os.environ.get("MAX_UPLOADS_PER_DAY", "6"))
+MAX_UPLOADS_PER_DAY = int(os.environ.get("MAX_UPLOADS_PER_DAY", "6"))  # YouTube quota
 YT_PRIVACY = os.environ.get("YT_PRIVACY", "public")  # public, unlisted or private
 YT_CLIENT_ID = os.environ.get("YT_CLIENT_ID", "")
 YT_CLIENT_SECRET = os.environ.get("YT_CLIENT_SECRET", "")
 YT_REFRESH_TOKEN = os.environ.get("YT_REFRESH_TOKEN", "")
+META_PAGE_ID = os.environ.get("META_PAGE_ID", "")          # Facebook Page id
+META_PAGE_TOKEN = os.environ.get("META_PAGE_TOKEN", "")    # never-expiring Page token
+META_IG_USER_ID = os.environ.get("META_IG_USER_ID", "")    # Instagram business id
+GRAPH_VERSION = "v21.0"
+GRAPH = f"https://graph.facebook.com/{GRAPH_VERSION}"
 TG_FILE_LIMIT = 20 * 1024 * 1024  # bots cannot fetch bigger files
 
 
@@ -115,7 +124,87 @@ def upload_to_youtube(path, title, description):
     resp = None
     while resp is None:
         _, resp = req.next_chunk()
-    return resp["id"]
+    return f"https://youtube.com/shorts/{resp['id']}"
+
+
+# --------------------------------------------------------------- facebook
+def facebook_ready():
+    return bool(META_PAGE_ID and META_PAGE_TOKEN)
+
+
+def instagram_ready():
+    return bool(META_IG_USER_ID and META_PAGE_TOKEN)
+
+
+def graph_error(r):
+    try:
+        e = r.json().get("error", {})
+        return f"{e.get('message', r.text[:200])} (code {e.get('code')})"
+    except Exception:
+        return r.text[:200]
+
+
+def graph_post(url, **kw):
+    r = requests.post(url, timeout=300, **kw)
+    if not r.ok:
+        raise RuntimeError(graph_error(r))
+    return r.json()
+
+
+def upload_to_facebook(path, title, description):
+    """Post the video as a Reel on the Facebook Page (start, upload, finish)."""
+    size = Path(path).stat().st_size
+    start = graph_post(f"{GRAPH}/{META_PAGE_ID}/video_reels",
+                       data={"upload_phase": "start", "access_token": META_PAGE_TOKEN})
+    video_id, upload_url = start["video_id"], start["upload_url"]
+    with open(path, "rb") as f:
+        r = requests.post(upload_url, data=f, timeout=600, headers={
+            "Authorization": f"OAuth {META_PAGE_TOKEN}",
+            "offset": "0", "file_size": str(size)})
+    if not r.ok:
+        raise RuntimeError("upload step: " + graph_error(r))
+    graph_post(f"{GRAPH}/{META_PAGE_ID}/video_reels", data={
+        "upload_phase": "finish", "video_id": video_id, "video_state": "PUBLISHED",
+        "description": f"{title}\n\n{description}"[:2000],
+        "access_token": META_PAGE_TOKEN})
+    return f"https://www.facebook.com/reel/{video_id}"
+
+
+# -------------------------------------------------------------- instagram
+def upload_to_instagram(path, title, description):
+    """Post the video as a Reel on the Instagram business account."""
+    size = Path(path).stat().st_size
+    container = graph_post(f"{GRAPH}/{META_IG_USER_ID}/media", data={
+        "media_type": "REELS", "upload_type": "resumable", "share_to_feed": "true",
+        "caption": f"{title}\n\n{description}"[:2200],
+        "access_token": META_PAGE_TOKEN})
+    cid = container["id"]
+    with open(path, "rb") as f:
+        r = requests.post(f"https://rupload.facebook.com/ig-api-upload/{GRAPH_VERSION}/{cid}",
+                          data=f, timeout=600, headers={
+                              "Authorization": f"OAuth {META_PAGE_TOKEN}",
+                              "offset": "0", "file_size": str(size)})
+    if not r.ok:
+        raise RuntimeError("upload step: " + graph_error(r))
+    for _ in range(40):  # Instagram needs a moment to process the video
+        time.sleep(8)
+        s = requests.get(f"{GRAPH}/{cid}", timeout=60, params={
+            "fields": "status_code,status", "access_token": META_PAGE_TOKEN}).json()
+        code = s.get("status_code")
+        if code == "FINISHED":
+            break
+        if code in ("ERROR", "EXPIRED"):
+            raise RuntimeError(f"Instagram processing {code}: {s.get('status')}")
+    else:
+        raise RuntimeError("Instagram took too long to process the video")
+    pub = graph_post(f"{GRAPH}/{META_IG_USER_ID}/media_publish", data={
+        "creation_id": cid, "access_token": META_PAGE_TOKEN})
+    try:
+        link = requests.get(f"{GRAPH}/{pub['id']}", timeout=60, params={
+            "fields": "permalink", "access_token": META_PAGE_TOKEN}).json().get("permalink")
+    except Exception:
+        link = None
+    return link or f"Instagram post id {pub['id']}"
 
 
 # ------------------------------------------------------------------- main
@@ -126,6 +215,33 @@ def load_queue():
         return q
     except Exception:
         return {"items": []}
+
+
+def any_platform_ready():
+    return youtube_ready() or facebook_ready() or instagram_ready()
+
+
+def post_everywhere(item, youtube_allowed):
+    """Download the clip once, post it to each connected platform.
+    Returns (results, errors), both dicts keyed by platform name."""
+    results, errors = {}, {}
+    jobs = []
+    if youtube_ready() and youtube_allowed:
+        jobs.append(("YouTube", upload_to_youtube))
+    if facebook_ready():
+        jobs.append(("Facebook", upload_to_facebook))
+    if instagram_ready():
+        jobs.append(("Instagram", upload_to_instagram))
+    with tempfile.TemporaryDirectory() as d:
+        path = Path(d, "clip.mp4")
+        fetch_video(item["file_id"], path)
+        for name, fn in jobs:
+            try:
+                results[name] = fn(path, item["title"], item["description"])
+            except Exception as e:
+                errors[name] = f"{type(e).__name__}: {str(e)[:250]}"
+                log(f"  {name} failed: {errors[name]}")
+    return results, errors
 
 
 def main(now=None):
@@ -141,8 +257,8 @@ def main(now=None):
         return 0
 
     rejected = collect_rejections()
-    published_today = sum(1 for i in q["items"] if i["status"] == "published"
-                          and now - i.get("published_at", 0) < 86400)
+    youtube_today = sum(1 for i in q["items"]
+                        if i.get("youtube_id") and now - i.get("published_at", 0) < 86400)
 
     for item in pending:
         cid = item["id"]
@@ -154,31 +270,39 @@ def main(now=None):
             log(f"{cid}: rejected")
         elif age_min < WINDOW_MINUTES:
             log(f"{cid}: still in reject window ({age_min:.0f} min old)")
-        elif not youtube_ready():
-            log(f"{cid}: YouTube not connected yet, leaving it")
+        elif not any_platform_ready():
+            log(f"{cid}: no platform connected yet, leaving it")
             if not q.get("warned_no_youtube"):
-                say("A clip finished its reject window, but YouTube is not connected "
-                    "yet, so nothing was posted. Add the YT_ secrets (see README).")
+                say("A clip finished its reject window, but no platform is connected "
+                    "yet, so nothing was posted. Add the YT_ or META_ secrets (see README).")
                 q["warned_no_youtube"] = True
-        elif published_today >= MAX_UPLOADS_PER_DAY:
-            item["status"] = "skipped_daily_limit"
-            clear_button(item["message_id"])
-            say(f"Daily upload limit ({MAX_UPLOADS_PER_DAY}) reached, skipped: {item['title']}")
         else:
+            youtube_allowed = youtube_today < MAX_UPLOADS_PER_DAY
             try:
-                with tempfile.TemporaryDirectory() as d:
-                    path = Path(d, "clip.mp4")
-                    fetch_video(item["file_id"], path)
-                    vid = upload_to_youtube(path, item["title"], item["description"])
-                item.update(status="published", youtube_id=vid, published_at=int(now))
-                published_today += 1
-                clear_button(item["message_id"])
-                say(f"Posted to YouTube ({YT_PRIVACY}): https://youtube.com/shorts/{vid}")
-                log(f"{cid}: published {vid}")
-            except Exception as e:
+                results, errors = post_everywhere(item, youtube_allowed)
+            except Exception as e:  # could not even fetch the video
+                results, errors = {}, {"Download": f"{type(e).__name__}: {str(e)[:250]}"}
+            if youtube_ready() and not youtube_allowed:
+                errors["YouTube"] = f"daily limit ({MAX_UPLOADS_PER_DAY}) reached, skipped"
+            clear_button(item["message_id"])
+            if results:
+                item.update(status="published", published_at=int(now), posted=results)
+                if "YouTube" in results:
+                    item["youtube_id"] = results["YouTube"].rsplit("/", 1)[-1]
+                    youtube_today += 1
+                lines = [f"Posted: {item['title']}"]
+                lines += [f"{n}: {link}" for n, link in results.items()]
+                if errors:
+                    lines += ["", "Did not work:"]
+                    lines += [f"{n}: {err}" for n, err in errors.items()]
+                say("\n".join(lines))
+                log(f"{cid}: published {sorted(results)}")
+            else:
                 item["status"] = "failed"
-                say(f"Could not post '{item['title']}': {type(e).__name__}: {str(e)[:200]}")
-                log(f"{cid}: failed {type(e).__name__}: {e}")
+                lines = [f"Could not post '{item['title']}':"]
+                lines += [f"{n}: {err}" for n, err in errors.items()]
+                say("\n".join(lines))
+                log(f"{cid}: failed {errors}")
 
     QUEUE_FILE.write_text(json.dumps(q, indent=1))
     return 0

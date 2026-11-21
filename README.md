@@ -37,10 +37,20 @@ Test without posting: run the workflow by hand and read the log, or locally
 
 Until the `YT_` secrets exist, clips are sent to Telegram but never posted.
 
-## Other platforms
+## Facebook and Instagram
 
-Facebook, Instagram and TikTok uploads come later, one at a time. Each needs its own
-approval step, so they are not in this first version.
+The publisher posts each approved clip as a Reel to the Facebook Page and the linked
+Instagram business account, in the same run as YouTube. Each platform is used only if its
+secrets exist, and one failing does not stop the others.
+
+| Secret | What |
+|---|---|
+| `META_PAGE_ID` | Facebook Page id |
+| `META_PAGE_TOKEN` | never-expiring Page access token |
+| `META_IG_USER_ID` | Instagram business account id |
+
+Get all three by running `python get_meta_token.py` on your computer (see the steps in the
+chat). TikTok comes later: it needs TikTok's approval before it can post publicly.
 
 ## Limits to know about
 
