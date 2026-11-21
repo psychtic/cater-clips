@@ -171,8 +171,8 @@ def upload_to_facebook(path, title, description):
 
 
 # -------------------------------------------------------------- instagram
-def upload_to_instagram(path, title, description):
-    """Post the video as a Reel on the Instagram business account."""
+def instagram_container_and_upload(path, title, description):
+    """Make a Reel container and send the video into it. Returns the container id."""
     size = Path(path).stat().st_size
     container = graph_post(f"{GRAPH}/{META_IG_USER_ID}/media", data={
         "media_type": "REELS", "upload_type": "resumable", "share_to_feed": "true",
@@ -186,6 +186,25 @@ def upload_to_instagram(path, title, description):
                               "offset": "0", "file_size": str(size)})
     if not r.ok:
         raise RuntimeError("upload step: " + graph_error(r))
+    return cid
+
+
+def upload_to_instagram(path, title, description):
+    """Post the video as a Reel on the Instagram business account.
+    Meta sometimes fails the upload step at random, so try up to 3 times,
+    each time with a fresh container."""
+    cid, last_error = None, None
+    for attempt in range(1, 4):
+        try:
+            cid = instagram_container_and_upload(path, title, description)
+            break
+        except RuntimeError as e:
+            last_error = e
+            log(f"  Instagram upload attempt {attempt} failed: {e}")
+            if attempt < 3:
+                time.sleep(20 * attempt)
+    if cid is None:
+        raise last_error
     for _ in range(40):  # Instagram needs a moment to process the video
         time.sleep(8)
         s = requests.get(f"{GRAPH}/{cid}", timeout=60, params={
