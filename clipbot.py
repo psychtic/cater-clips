@@ -53,6 +53,9 @@ TWITCH_SECRET = os.environ.get("TWITCH_CLIENT_SECRET", "")
 ANTHROPIC_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-haiku-5-5")
 
+LAST_TRANSCRIPT = ""
+
+
 FONT_CANDIDATES = [
     os.environ.get("FONT_FILE", ""),
     "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
@@ -259,6 +262,8 @@ def transcribe(video_path, ass_path):
                 if text:
                     words.append((w.start, w.end, text))
         log(f"  captions: {len(words)} words, language {getattr(info, 'language', '?')}")
+        global LAST_TRANSCRIPT
+        LAST_TRANSCRIPT = " ".join(w[2] for w in words)  # used by the live catcher for titles
         return build_ass(words, ass_path)
     except Exception as e:
         log(f"  captions skipped: {type(e).__name__}: {e}")

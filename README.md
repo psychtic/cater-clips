@@ -15,6 +15,18 @@ Separate from the Peller robot. Own repo, own Telegram bot, own YouTube channel.
 3. clips older than 30 minutes that you did not reject are uploaded to YouTube
 4. you get a Telegram message with the link
 
+**Live catcher** (`live.yml`, `livebot.py`): catches moments while Cater Efe is streaming
+1. every 15 minutes a quick check asks Twitch (through streamlink) if `carterefe` is live; nothing else runs if he is not
+2. while live it records the stream in 6 second pieces and listens to the volume
+3. when the last ~12 seconds are much louder than normal (shouting, laughing, hype) it cuts about 30 seconds before and 25 seconds after
+4. the cut goes through the same captions, vertical video, Telegram Reject button and posting as the normal clips. Moments with no speech are skipped
+5. 7 minutes minimum between clips, at most 4 clips per run
+6. after each clip's 30 minute window it starts the publisher right away
+
+Tuning (environment variables in `live.yml`): `SPIKE_DB` (lower = catches more, default 7),
+`MIN_LOUD_DB`, `COOLDOWN_SECONDS`, `MAX_LIVE_CLIPS`, `PRE_SEGS` / `POST_SEGS`.
+Test without a stream: `SOURCE_URL=video.mp4 DRY_RUN=1 LIVE_REQUIRE_SPEECH=0 python livebot.py`.
+
 ## Two ways to find clips
 
 - **Twitch API** (steady): add `TWITCH_CLIENT_ID` and `TWITCH_CLIENT_SECRET` secrets.
