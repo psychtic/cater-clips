@@ -7,7 +7,9 @@
    "message_id": 2,
    "file_id": "BAACAgQAAxkDAAMCawAB3FabEVTH25JKSvPdXnC43peLAAIuIQACPsoAAVBze-9DWH4PPz0E",
    "sent_at": 1795218519,
-   "status": "pending"
+   "status": "published",
+   "youtube_id": "5aVtRd6ElDo",
+   "published_at": 1795227545
   },
   {
    "id": "2659546078",
@@ -16,7 +18,9 @@
    "message_id": 3,
    "file_id": "BAACAgQAAxkDAAMDawAB3HU8NSP053CxS7-Up3E6qdb4AAIxIQACPsoAAVDKojEob_x56j0E",
    "sent_at": 1795218550,
-   "status": "pending"
+   "status": "published",
+   "youtube_id": "3jPrUTXMjJc",
+   "published_at": 1795227545
   }
  ]
 }
