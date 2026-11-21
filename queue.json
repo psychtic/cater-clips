@@ -29,7 +29,9 @@
    "message_id": 6,
    "file_id": "BAACAgQAAxkDAAMGawEvAcgek1iC5FCbWJQQumW2kmgAAkggAAI-yghQmHpqudaDeh89BA",
    "sent_at": 1795239682,
-   "status": "pending"
+   "status": "published",
+   "youtube_id": "aaPr1HyOtmI",
+   "published_at": 1795246740
   },
   {
    "id": "1899404765",
@@ -38,7 +40,9 @@
    "message_id": 7,
    "file_id": "BAACAgQAAxkDAAMHawEvLG-IWf3BI4nt77nVhApK-XIAAkkgAAI-yghQHDrnTV-9Uwo9BA",
    "sent_at": 1795239725,
-   "status": "pending"
+   "status": "published",
+   "youtube_id": "8phktkaPqEM",
+   "published_at": 1795246740
   }
  ]
 }
