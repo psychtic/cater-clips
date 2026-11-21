@@ -82,7 +82,12 @@
    "message_id": 14,
    "file_id": "BAACAgQAAxkDAAMOawHP7oc9UF6lW8F3iCopo0zjy-gAAlghAAI-yghQov24Ji_aFC49BA",
    "sent_at": 1795280878,
-   "status": "pending"
+   "status": "published",
+   "published_at": 1795283096,
+   "posted": {
+    "Facebook": "https://www.facebook.com/reel/1826303978410459",
+    "Instagram": "https://www.instagram.com/reel/DgAzBbEGi7Q/"
+   }
   },
   {
    "id": "2349298234",
@@ -91,7 +96,12 @@
    "message_id": 15,
    "file_id": "BAACAgQAAxkDAAMPawHQDXS7MF9aWm7l1Atg3Qf5M4oAAlkhAAI-yghQoQfYK-oxAYQ9BA",
    "sent_at": 1795280910,
-   "status": "pending"
+   "status": "published",
+   "published_at": 1795283096,
+   "posted": {
+    "Facebook": "https://www.facebook.com/reel/2212901679262265",
+    "Instagram": "https://www.instagram.com/reel/DgAzHgzD2aW/"
+   }
   }
  ]
 }
