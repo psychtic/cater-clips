@@ -142,7 +142,14 @@
    "message_id": 22,
    "file_id": "BAACAgQAAxkDAAMWawLooByy6Hjg0cC454zO9_VDsxMAAiohAALspRlQqyDNR6buEeg9BA",
    "sent_at": 1795352736,
-   "status": "pending"
+   "status": "published",
+   "published_at": 1795370402,
+   "posted": {
+    "YouTube": "https://youtube.com/shorts/5Czt0dkqNGE",
+    "Facebook": "https://www.facebook.com/reel/1146034608075515",
+    "Instagram": "https://www.instagram.com/reel/DgDZi63DLXB/"
+   },
+   "youtube_id": "5Czt0dkqNGE"
   },
   {
    "id": "3693287571",
@@ -151,7 +158,14 @@
    "message_id": 23,
    "file_id": "BAACAgQAAxkDAAMXawLoyh2y459XgC2TH7v9P6c-chQAAishAALspRlQz8rnT9RQmzg9BA",
    "sent_at": 1795352778,
-   "status": "pending"
+   "status": "published",
+   "published_at": 1795370402,
+   "posted": {
+    "YouTube": "https://youtube.com/shorts/ZlBz10i-rnA",
+    "Facebook": "https://www.facebook.com/reel/1156905280120506",
+    "Instagram": "https://www.instagram.com/reel/DgDZoWgjFJR/"
+   },
+   "youtube_id": "ZlBz10i-rnA"
   }
  ]
 }
