@@ -193,9 +193,8 @@ def make_clip(seg_dir, first, last, stream_title):
         src, ass, out = Path(d, "in.ts"), Path(d, "captions.ass"), Path(d, "out.mp4")
         subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0",
                         "-i", str(listing), "-c", "copy", str(src)], check=True, timeout=180)
-        clipbot.LAST_TRANSCRIPT = ""
         has_captions = clipbot.transcribe(src, ass)
-        if REQUIRE_SPEECH and not has_captions:
+        if REQUIRE_SPEECH and not clipbot.LAST_TRANSCRIPT.strip():
             log("  no speech heard (game sound / music / noise), skipping")
             return None
         clipbot.build_video(src, out, CREDIT, srt=ass if has_captions else None)

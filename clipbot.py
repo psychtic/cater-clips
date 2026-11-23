@@ -16,9 +16,11 @@ Usage:
 """
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
+import textwrap
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -32,13 +34,18 @@ MAX_PER_RUN = int(os.environ.get("MAX_PER_RUN", "2"))        # videos per run
 MIN_SECONDS = int(os.environ.get("MIN_SECONDS", "12"))       # skip tiny clips
 MAX_AGE_HOURS = int(os.environ.get("MAX_AGE_HOURS", "720"))  # look back 30 days
 CAPTIONS = os.environ.get("CAPTIONS", "1") == "1"
-WHISPER_MODEL = os.environ.get("WHISPER_MODEL", "small")     # base < small < medium
+WHISPER_MODEL = os.environ.get("WHISPER_MODEL", "medium")    # base < small < medium
 WHISPER_LANGUAGE = os.environ.get("WHISPER_LANGUAGE", "en")  # "" = auto-detect
 # a hint that makes Whisper expect Nigerian Pidgin words instead of guessing wrong ones
 WHISPER_PROMPT = os.environ.get("WHISPER_PROMPT", (
-    "Nigerian Pidgin and Nigerian English streamer. Words: abeg, wahala, oga, "
-    "na so, wetin, dey, no be, I no know, how far, e don do, sha, abi, chai, "
-    "omo, shey, biko, Carter Efe, Twitch, TikTok, Lagos."))
+    "Nigerian Pidgin and Nigerian English streamer talking fast with friends. Words: "
+    "abeg, wahala, oga, na so, wetin, dey, no be, I no know, how far, e don do, sha, abi, "
+    "chai, omo, shey, biko, wallahi, na wa, sharp sharp, gist, japa, jare, my guy, bro, "
+    "make we go, no wahala, e be like say, Carter Efe, Twitch, TikTok, Naija, Lagos."))
+HOOK = os.environ.get("HOOK", "1") == "1"                     # headline text at the top
+HOOK_MODEL = os.environ.get("HOOK_MODEL", "claude-sonnet-5-5")
+HOOK_SIZE = int(os.environ.get("HOOK_SIZE", "62"))            # hook text height in pixels
+HOOK_MARGIN = int(os.environ.get("HOOK_MARGIN", "250"))       # pixels down from the top
 CAPTION_WORDS = int(os.environ.get("CAPTION_WORDS", "3"))     # words on screen at once
 CAPTION_SIZE = int(os.environ.get("CAPTION_SIZE", "92"))      # text height in pixels
 CAPTION_MARGIN = int(os.environ.get("CAPTION_MARGIN", "420")) # pixels up from the bottom
@@ -54,6 +61,7 @@ ANTHROPIC_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-haiku-5-5")
 
 LAST_TRANSCRIPT = ""
+LAST_HOOK = ""
 
 
 FONT_CANDIDATES = [
@@ -201,16 +209,17 @@ ScaledBorderAndShadow: yes
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Default,DejaVu Sans,{size},&H00FFFFFF,&H00FFFFFF,&H00000000,&H64000000,1,0,0,0,100,100,0,0,1,{outline},3,2,60,60,{margin},1
+Style: Hook,DejaVu Sans,{hook_size},&H00FFFFFF,&H00FFFFFF,&H70000000,&H70000000,1,0,0,0,100,100,0,0,3,18,0,8,60,60,{hook_margin},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
 
 
-def build_ass(words, ass_path):
+def build_ass(words, ass_path, hook=""):
     """words = [(start, end, text), ...]. Writes pop-style captions: a few words
     at a time, big bold uppercase, the word being spoken in gold."""
-    if not words:
+    if not words and not hook:
         return False
     chunks, cur = [], []
     for w in words:
@@ -235,39 +244,100 @@ def build_ass(words, ass_path):
             events.append(f"Dialogue: 0,{ass_time(start)},{ass_time(nxt)},Default,,0,0,0,,"
                           + " ".join(parts))
 
+    if hook:  # headline for the whole clip, in a dark box at the top
+        lines = textwrap.wrap(hook.upper().replace("{", "(").replace("}", ")"), 22)[:3]
+        events.insert(0, f"Dialogue: 1,{ass_time(0)},{ass_time(90)},Hook,,0,0,0,,"
+                         + "\\N".join(lines))
     header = ASS_HEADER.format(size=CAPTION_SIZE, outline=max(4, CAPTION_SIZE // 14),
-                               margin=CAPTION_MARGIN)
+                               margin=CAPTION_MARGIN, hook_size=HOOK_SIZE,
+                               hook_margin=HOOK_MARGIN)
     Path(ass_path).write_text(header + "\n".join(events) + "\n", encoding="utf-8")
     return True
 
 
-def transcribe(video_path, ass_path):
-    """Transcribe with Whisper (word timings) and write an .ass caption file.
-    Returns True on success, False to skip captions."""
-    if not CAPTIONS:
-        return False
+def ask_claude(prompt, model, max_tokens=200):
+    r = requests.post(
+        "https://api.anthropic.com/v1/messages",
+        headers={"x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01",
+                 "content-type": "application/json"},
+        json={"model": model, "max_tokens": max_tokens,
+              "messages": [{"role": "user", "content": prompt}]},
+        timeout=60)
+    r.raise_for_status()
+    return r.json()["content"][0]["text"].strip().strip('"').strip()
+
+
+def fan_title_ok(title):
+    """A fan's clip title is worth showing only if it describes something."""
+    words = re.findall(r"[A-Za-z']+", title or "")
+    return len(words) >= 2 and len(title.strip()) >= 10
+
+
+def make_hook(transcript, clip_title=""):
+    """Short headline that says what is actually happening in the clip.
+    Claude writes it from the words spoken plus the clip title. Without an API key
+    (or if Claude says it cannot tell) a descriptive fan title is used, else nothing."""
+    fallback = clip_title.strip() if fan_title_ok(clip_title) else ""
+    if not (HOOK and ANTHROPIC_KEY):
+        return fallback[:66] if HOOK else ""
+    if not (transcript.strip() or fallback):
+        return ""
     try:
-        from faster_whisper import WhisperModel
-        model = WhisperModel(WHISPER_MODEL, device="cpu", compute_type="int8")
-        kwargs = dict(vad_filter=True, word_timestamps=True, beam_size=5,
-                      initial_prompt=WHISPER_PROMPT,
-                      condition_on_previous_text=False)
-        if WHISPER_LANGUAGE:
-            kwargs["language"] = WHISPER_LANGUAGE
-        segments, info = model.transcribe(str(video_path), **kwargs)
-        words = []
-        for seg in segments:
-            for w in (seg.words or []):
-                text = w.word.strip()
-                if text:
-                    words.append((w.start, w.end, text))
-        log(f"  captions: {len(words)} words, language {getattr(info, 'language', '?')}")
-        global LAST_TRANSCRIPT
-        LAST_TRANSCRIPT = " ".join(w[2] for w in words)  # used by the live catcher for titles
-        return build_ass(words, ass_path)
+        text = ask_claude(
+            f"You write the on-screen hook for a vertical short video clip from Nigerian "
+            f"streamer {CREDIT}'s Twitch stream. Viewers read it at the top for the whole "
+            f"clip, so it must tell them what is actually happening, in plain words, and "
+            f"make them want to watch.\n\n"
+            f"Rules:\n"
+            f"- Maximum 9 words, present tense, simple English a Nigerian viewer gets at once.\n"
+            f"- Say who and what, if the words spoken or the clip title show it.\n"
+            f"- Never invent names, events or facts that the transcript or title do not support.\n"
+            f"- No hashtags, quotes or emojis. Curious, not a lie.\n"
+            f"- If you cannot tell what is happening, reply with exactly NONE.\n\n"
+            f"Clip title (written by a fan, may help): {clip_title or '(none)'}\n"
+            f"Words spoken (auto-generated, may contain mishearings): "
+            f"{transcript[:700] or '(none heard)'}\n\n"
+            f"Reply with only the hook text.", HOOK_MODEL)
+        if text and text.upper() != "NONE":
+            words = text.split()
+            while len(" ".join(words)) > 66 and len(words) > 1:  # fits 3 lines
+                words.pop()
+            return " ".join(words).strip('"')
     except Exception as e:
-        log(f"  captions skipped: {type(e).__name__}: {e}")
-        return False
+        log(f"  hook via Claude skipped: {type(e).__name__}")
+    return fallback[:66]
+
+
+def transcribe(video_path, ass_path, clip_title=""):
+    """Transcribe with Whisper (word timings), make the hook line, and write the .ass
+    caption file. Returns True if there is anything to show (captions and/or hook).
+    LAST_TRANSCRIPT holds the words spoken (empty means nobody spoke)."""
+    global LAST_TRANSCRIPT, LAST_HOOK
+    LAST_TRANSCRIPT, LAST_HOOK = "", ""
+    words = []
+    if CAPTIONS:
+        try:
+            from faster_whisper import WhisperModel
+            model = WhisperModel(WHISPER_MODEL, device="cpu", compute_type="int8")
+            kwargs = dict(vad_filter=True, word_timestamps=True, beam_size=5,
+                          initial_prompt=WHISPER_PROMPT,
+                          condition_on_previous_text=False)
+            if WHISPER_LANGUAGE:
+                kwargs["language"] = WHISPER_LANGUAGE
+            segments, info = model.transcribe(str(video_path), **kwargs)
+            for seg in segments:
+                for w in (seg.words or []):
+                    text = w.word.strip()
+                    if text:
+                        words.append((w.start, w.end, text))
+            log(f"  captions: {len(words)} words, language {getattr(info, 'language', '?')}")
+        except Exception as e:
+            log(f"  captions skipped: {type(e).__name__}: {e}")
+    LAST_TRANSCRIPT = " ".join(w[2] for w in words)
+    LAST_HOOK = make_hook(LAST_TRANSCRIPT, clip_title) if CAPTIONS else ""
+    if LAST_HOOK:
+        log(f"  hook: {LAST_HOOK}")
+    return build_ass(words, ass_path, LAST_HOOK)
 
 
 # ------------------------------------------------------------------ video
@@ -332,7 +402,10 @@ def make_title(clip):
                         f"Write a YouTube Shorts title (max 70 characters, no quotes, "
                         f"curiosity-driven, must not mislead) for a clip of Nigerian "
                         f"streamer {CREDIT} on Twitch. The clip is called: "
-                        f"'{clip['title']}'. Reply with only the title.")}]},
+                        f"'{clip['title']}'. What is happening (hook): '{LAST_HOOK or 'unknown'}'. "
+                        f"Words spoken (may contain mishearings): "
+                        f"'{LAST_TRANSCRIPT[:400] or 'none heard'}'. "
+                        f"Reply with only the title.")}]},
                 timeout=40)
             r.raise_for_status()
             t = r.json()["content"][0]["text"].strip().strip('"')
@@ -427,7 +500,7 @@ def main():
             with tempfile.TemporaryDirectory() as d:
                 src, srt, out = Path(d, "in.mp4"), Path(d, "captions.ass"), Path(d, "out.mp4")
                 download(clip["url"], src)
-                has_srt = transcribe(src, srt)
+                has_srt = transcribe(src, srt, clip["title"])
                 build_video(src, out, CREDIT, srt=srt if has_srt else None)
                 title, desc = make_title(clip)
                 if DRY_RUN:

@@ -49,6 +49,16 @@ Test without posting: run the workflow by hand and read the log, or locally
 
 Until the `YT_` secrets exist, clips are sent to Telegram but never posted.
 
+## Captions and the hook line
+
+- Captions use the Whisper **medium** model with a Nigerian Pidgin word hint (`WHISPER_MODEL`, `WHISPER_PROMPT`).
+- **Hook line:** a short headline at the top of every video that says what is actually happening
+  ("Jasmine tells Carter she wants another woman to come"). With an `ANTHROPIC_API_KEY`
+  secret, Claude writes it from the words spoken plus the fan's clip title (`HOOK_MODEL`,
+  default `claude-sonnet-5-5`). Without the key, a descriptive fan clip title is used, and
+  nothing is shown when the title is just "ok". Turn it off with `HOOK=0`.
+- With the key, the YouTube title uses the same context.
+
 ## Facebook and Instagram
 
 The publisher posts each approved clip as a Reel to the Facebook Page and the linked
