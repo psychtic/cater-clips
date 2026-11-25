@@ -293,7 +293,11 @@
    "message_id": 42,
    "file_id": "BAACAgQAAxkDAAMqawXz7NMiRBABcgurLPOZfU3HiAADVSIAAuurMVBm-WUvVsqesT0E",
    "sent_at": 1795552236,
-   "status": "pending"
+   "status": "published",
+   "published_at": 1795578152,
+   "posted": {
+    "Instagram": "https://www.instagram.com/reel/DgJlzTRIu44/"
+   }
   },
   {
    "id": "4293605353",
@@ -302,7 +306,11 @@
    "message_id": 43,
    "file_id": "BAACAgQAAxkDAAMrawX0DcTcqgYhGCBVKR_5XFPsqkEAAlgiAALrqzFQCJH6pbdoitU9BA",
    "sent_at": 1795552270,
-   "status": "pending"
+   "status": "published",
+   "published_at": 1795578152,
+   "posted": {
+    "Instagram": "https://www.instagram.com/reel/DgJl5_YISxI/"
+   }
   }
  ]
 }
