@@ -319,7 +319,12 @@
    "message_id": 46,
    "file_id": "BAACAgQAAxkDAAMuawaIfXkiRH9W07Hiz2oyevscK3EAAtglAALrqzFQL1TCdN6HQnA9BA",
    "sent_at": 1795590269,
-   "status": "pending"
+   "status": "published",
+   "published_at": 1795622335,
+   "posted": {
+    "YouTube": "https://youtube.com/shorts/1gXBHIi0hPI"
+   },
+   "youtube_id": "1gXBHIi0hPI"
   },
   {
    "id": "3823021450",
@@ -328,7 +333,13 @@
    "message_id": 47,
    "file_id": "BAACAgQAAxkDAAMvawaIsEhww8ANhvEkUozhcLkvY5sAAtolAALrqzFQGKQFcJdWVrY9BA",
    "sent_at": 1795590320,
-   "status": "pending"
+   "status": "published",
+   "published_at": 1795622335,
+   "posted": {
+    "YouTube": "https://youtube.com/shorts/nB1m0arH5oc",
+    "Instagram": "https://www.instagram.com/reel/DgK6aUphANJ/"
+   },
+   "youtube_id": "nB1m0arH5oc"
   }
  ]
 }
