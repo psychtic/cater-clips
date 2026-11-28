@@ -438,7 +438,12 @@
    "message_id": 60,
    "file_id": "BAACAgQAAxkDAAM8awo80hGVx3kFgAQ2zAdWcE4ua84AAusfAAK2C1FQZ0wwTyCiXvY9BA",
    "sent_at": 1795833043,
-   "status": "pending"
+   "status": "published",
+   "published_at": 1795876097,
+   "posted": {
+    "YouTube": "https://youtube.com/shorts/lw-slcymBm4"
+   },
+   "youtube_id": "lw-slcymBm4"
   },
   {
    "id": "4115616978",
@@ -447,7 +452,13 @@
    "message_id": 61,
    "file_id": "BAACAgQAAxkDAAM9awo9CEEEzJMGBSl8jPzNhsBQ_wEAAuwfAAK2C1FQIuTKmXUSYTU9BA",
    "sent_at": 1795833097,
-   "status": "pending"
+   "status": "published",
+   "published_at": 1795876097,
+   "posted": {
+    "YouTube": "https://youtube.com/shorts/i-q5Kpzd5Lw",
+    "Instagram": "https://www.instagram.com/reel/DgSebesg8b8/"
+   },
+   "youtube_id": "i-q5Kpzd5Lw"
   },
   {
    "id": "3057544005",
@@ -456,7 +467,13 @@
    "message_id": 64,
    "file_id": "BAACAgQAAxkDAANAawrdGiCHWP_ibYpxhqB7Go8vdmcAAronAAKON1hQl010ICxsu209BA",
    "sent_at": 1795874075,
-   "status": "pending"
+   "status": "published",
+   "published_at": 1795876097,
+   "posted": {
+    "YouTube": "https://youtube.com/shorts/SpmnlETuIH0",
+    "Instagram": "https://www.instagram.com/reel/DgSeiKcANtm/"
+   },
+   "youtube_id": "SpmnlETuIH0"
   },
   {
    "id": "2715884123",
@@ -465,7 +482,12 @@
    "message_id": 65,
    "file_id": "BAACAgQAAxkDAANBawrdQXbSbYgkqmE4OS_eW10RuDgAArsnAAKON1hQnjaL3wm43Nk9BA",
    "sent_at": 1795874114,
-   "status": "pending"
+   "status": "published",
+   "published_at": 1795876097,
+   "posted": {
+    "YouTube": "https://youtube.com/shorts/mAGEOckcCPs"
+   },
+   "youtube_id": "mAGEOckcCPs"
   }
  ]
 }
